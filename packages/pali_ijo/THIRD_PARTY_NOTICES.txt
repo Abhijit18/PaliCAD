@@ -1,0 +1,14 @@
+Third-party notices for Pali Ijo
+
+CSG.js polygon-splitting and BSP fallback attribution
+Copyright (c) 2011 Evan Wallace (http://madebyevan.com/)
+https://github.com/evanw/csg.js
+License: MIT; full text in licenses/CSG.js-LICENSE.txt
+
+The _split helper in lib/src/csg/boolean.dart is credited as an adaptation
+of CSG.Plane.splitPolygon in csg.js, based on its closely matching
+classification flags, four output buckets and spanning-edge traversal.
+Pali Ijo's version uses Dart vectors and face IDs and adds denominator guards
+and clamped intersections. The primary Boolean path uses fragment
+classification. Its closed-solid fallback (_Partition and its caller) uses
+the BSP clip/invert/build sequence from CSG.js.
