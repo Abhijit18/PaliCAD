@@ -22,10 +22,14 @@ import 'dart:typed_data';
 
 import 'package:pali_ijo/pali_ijo.dart';
 import 'package:pali_ijo/src/cli/cli.dart';
+import 'package:vector_math/vector_math_64.dart';
 
 void main() {
   final api = JSObject()
     ..setProperty('run'.toJS, _run.toJS)
+    ..setProperty('runBytes'.toJS, _runBytes.toJS)
+    ..setProperty('importAll'.toJS, _importAll.toJS)
+    ..setProperty('extrudeProfile'.toJS, _extrudeProfile.toJS)
     ..setProperty('formats'.toJS, _formats.toJS);
   globalContext.setProperty('paliIjo'.toJS, api);
 }
@@ -36,9 +40,11 @@ void main() {
 ///
 /// ```js
 /// const box = await paliIjo.run(['box', '--size', '40,40,20'], null);
+/// const tool = await paliIjo.run(['cylinder', '--radius', '4', '--height', '12'], null);
 /// const part = await paliIjo.run(
-///   ['fillet', '--radius', '4', '--edges', 'convex'],
+///   ['boolean', '--op', 'subtract', '--with', 'tool.json'],
 ///   box.stdout,
+///   tool.stdout,
 /// );
 /// const info = await paliIjo.run(['measure', '--json'], part.stdout);
 /// console.log(JSON.parse(info.stdout).volume);
@@ -52,27 +58,86 @@ void main() {
 /// filesystem to write it to. Its values are `Uint8Array`, so a binary export
 /// survives — `paliIjo.run(['export', '--out', 'part.3mf'], solid)` then
 /// `result.files['part.3mf']` is bytes ready for a `Blob`.
-JSPromise<JSObject> _run(JSArray<JSString> argv, JSString? stdin) {
+///
+/// `runBytes(argv, bytes)` runs the same command with binary stdin, for
+/// importing STEP, STL, 3MF and OBJ data without converting it through text.
+JSPromise<JSObject> _run(
+  JSArray<JSString> argv,
+  JSString? stdin, [
+  JSString? withDocument,
+]) {
   final args = [
     for (final a in argv.toDart) a.toDart,
   ];
-  final host = MemoryHost(
-    stdin: stdin == null ? null : utf8.encode(stdin.toDart),
-  );
+  return _execute(
+    args,
+    stdin == null ? null : utf8.encode(stdin.toDart),
+    withDocument?.toDart,
+  ).toJS;
+}
 
-  return (() async {
-    final code = await IjoCli(host).run(args);
-    final files = JSObject();
-    for (final entry in host.files.entries) {
-      files.setProperty(entry.key.toJS, entry.value.toJS);
+/// Runs a command with binary stdin, for example an imported STEP or STL file.
+JSPromise<JSObject> _runBytes(
+  JSArray<JSString> argv,
+  JSUint8Array stdin, [
+  JSString? withDocument,
+]) {
+  final args = [
+    for (final a in argv.toDart) a.toDart,
+  ];
+  return _execute(args, stdin.toDart, withDocument?.toDart).toJS;
+}
+
+JSPromise<JSString> _importAll(JSUint8Array bytes, JSString name) =>
+    _importAllAsync(bytes, name).toJS;
+
+Future<JSString> _importAllAsync(JSUint8Array bytes, JSString name) async {
+  final documents = IjoIo.decodeAll(bytes.toDart, name: name.toDart);
+  return jsonEncode(documents.map((document) => document.toJson()).toList()).toJS;
+}
+
+JSString _extrudeProfile(JSString profileJson, JSNumber height, JSString name) {
+  final decoded = jsonDecode(profileJson.toDart);
+  if (decoded is! List || decoded.length < 3) {
+    throw FormatException('An extrusion profile needs at least three points.');
+  }
+  final ring = <Vector3>[];
+  for (final point in decoded) {
+    if (point is! List ||
+        point.length != 2 ||
+        point.any((value) => value is! num || !value.toDouble().isFinite)) {
+      throw FormatException('Extrusion profile points must contain finite X and Y coordinates.');
     }
-    return JSObject()
-      ..setProperty('code'.toJS, code.toJS)
-      ..setProperty('stdout'.toJS, host.stdout.toJS)
-      ..setProperty('stderr'.toJS, host.stderr.toJS)
-      ..setProperty('files'.toJS, files);
-  })()
-      .toJS;
+    ring.add(Vector3((point[0] as num).toDouble(), (point[1] as num).toDouble(), 0));
+  }
+  final depth = height.toDartDouble;
+  if (!depth.isFinite || depth <= 0) {
+    throw FormatException('Extrusion height must be a positive finite number.');
+  }
+  final solid = BrepExtrude.polygon(ring, Vector3(0, 0, depth));
+  IjoOps.tessellateClosed(solid, op: 'Sketch extrusion');
+  return IjoDocument.solid(solid, name: name.toDart).encode().toJS;
+}
+
+Future<JSObject> _execute(
+  List<String> args,
+  Uint8List? stdin,
+  String? withDocument,
+) async {
+  final host = MemoryHost(
+    files: withDocument == null ? null : {'tool.json': utf8.encode(withDocument)},
+    stdin: stdin,
+  );
+  final code = await IjoCli(host).run(args);
+  final files = JSObject();
+  for (final entry in host.files.entries) {
+    files.setProperty(entry.key.toJS, entry.value.toJS);
+  }
+  return JSObject()
+    ..setProperty('code'.toJS, code.toJS)
+    ..setProperty('stdout'.toJS, host.stdout.toJS)
+    ..setProperty('stderr'.toJS, host.stderr.toJS)
+    ..setProperty('files'.toJS, files);
 }
 
 /// The file extensions `--out` and `export --format` understand.

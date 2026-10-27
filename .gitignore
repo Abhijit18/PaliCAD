@@ -3,3 +3,6 @@
 build/
 .pub/
 .pub-cache/
+web/node_modules/
+web/dist/
+web/public/kernel/

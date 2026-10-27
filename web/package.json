@@ -1,0 +1,23 @@
+{
+  "name": "palicad-workspace-prototype",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build:kernel": "node scripts/build-kernel.mjs",
+    "predev": "npm run build:kernel",
+    "dev": "vite",
+    "prebuild": "npm run build:kernel",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.2",
+    "@vitejs/plugin-react": "^4.4.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "three": "^0.186.1",
+    "vite": "^6.3.5"
+  }
+}

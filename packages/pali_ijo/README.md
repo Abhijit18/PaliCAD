@@ -651,7 +651,7 @@ STEP supports enclosed cavities and supported trimmed surfaces. Some curves are 
 
 ## Browser build
 
-The WebAssembly entry point exposes the CLI command interface as `globalThis.paliIjo`. Browser support is currently partial: module compilation and basic box/JSON operations work, while the logging used by some operations depends on native Dart runtime features. From this package folder:
+The WebAssembly entry point exposes the CLI command interface as `globalThis.paliIjo`. It compiles the browser kernel; operations still depend on the command and geometry limitations described in this guide. From this package folder:
 
 ```sh
 dart pub get
@@ -686,7 +686,7 @@ const download = new Blob([result.files['part.json']], {
 
 The generated loader example above matches the current Dart SDK; older SDKs may generate a different loader interface.
 
-Each call uses a fresh in-memory host. The current JavaScript wrapper accepts text input and does not accept an input-file map, so commands needing an extra file, such as `boolean --with`, need additional host integration. Outputs are returned through `files`. STL export currently encounters a native-runtime logging error in Wasm; check command failures and rejected promises when integrating other operations.
+Each call uses a fresh in-memory host. The optional third `run` argument supplies one additional text document at the virtual path `tool.json`, for example `paliIjo.run(['boolean', '--op', 'subtract', '--with', 'tool.json'], baseDocument, toolDocument)`. `runBytes(argv, bytes)` accepts binary stdin for importing STEP, STL, 3MF and OBJ data without converting it through text. Outputs are returned through `files`. Check command failures and rejected promises when integrating operations; some commands may depend on native-runtime behavior that is unavailable in Wasm.
 
 ## Current limits
 

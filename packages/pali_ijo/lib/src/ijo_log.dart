@@ -43,9 +43,14 @@ class IjoLog {
   static String? get logFile => _logFile ?? _envFile;
 
   static String? get _envFile {
-    final env = Platform.environment['IJO_DEBUG_FILE'];
+    final env = _environment('IJO_DEBUG_FILE');
     if (env == null || env.isEmpty) return null;
     return env;
+  }
+
+  static String? _environment(String key) {
+    if (!const bool.fromEnvironment('dart.library.io')) return null;
+    return Platform.environment[key];
   }
 
   /// Truncate [path] and start a new session. Host isolate only.
@@ -82,9 +87,9 @@ class IjoLog {
   static bool get enabled {
     final forced = _override;
     if (forced != null) return forced;
-    final fromEnv = Platform.environment['IJO_DEBUG'] ??
+    final fromEnv = _environment('IJO_DEBUG') ??
         // Retained for PaliCAD run configurations that predate the split.
-        Platform.environment['PALICAD_IJO_DEBUG'];
+        _environment('PALICAD_IJO_DEBUG');
     if (fromEnv == null || fromEnv.isEmpty) return false;
     return fromEnv != '0';
   }
@@ -92,12 +97,13 @@ class IjoLog {
   static bool get verbose {
     final forced = _verboseOverride;
     if (forced != null) return forced;
-    final fromEnv = Platform.environment['IJO_DEBUG'] ??
-        Platform.environment['PALICAD_IJO_DEBUG'];
+    final fromEnv =
+        _environment('IJO_DEBUG') ?? _environment('PALICAD_IJO_DEBUG');
     return fromEnv == '2' || fromEnv == 'verbose';
   }
 
   static String get where {
+    if (!const bool.fromEnvironment('dart.library.io')) return 'browser';
     final name = Isolate.current.debugName;
     if (name == null || name.isEmpty) return 'main';
     return name;

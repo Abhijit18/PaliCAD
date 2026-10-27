@@ -8,6 +8,7 @@ import '../mesh/mesh_data.dart';
 import 'obj.dart';
 import 'solid_json.dart';
 import 'step.dart';
+import 'step_analytic.dart' show IjoStepBrep;
 import 'stl.dart';
 import 'threemf.dart';
 
@@ -134,6 +135,76 @@ enum IjoFormat {
 /// is a matter of the filename rather than of which class to reach for.
 class IjoIo {
   IjoIo._();
+
+  /// Decodes every independent body in a file.
+  ///
+  /// STEP files may contain multiple solids. Preserve analytic BREP geometry
+  /// whenever the reader supports the file; if it does not, return each
+  /// faceted STEP body as a mesh instead. Other interchange formats currently
+  /// represent one body per file.
+  static List<IjoDocument> decodeAll(
+    Uint8List bytes, {
+    IjoFormat? format,
+    String? name,
+  }) {
+    final f = format ??
+        (name == null ? null : IjoFormat.forPath(name)) ??
+        IjoFormat.sniff(bytes);
+    if (f != IjoFormat.step) {
+      return [decode(bytes, format: f, name: name)];
+    }
+
+    final label = name == null ? null : _stem(name);
+    try {
+      final result = IjoStepBrep.readAll(bytes);
+      if (result.solids.isNotEmpty) {
+        return [
+          for (var i = 0; i < result.solids.length; i++)
+            IjoDocument.solid(
+              result.solids[i],
+              name: result.names[i].trim().isNotEmpty
+                  ? result.names[i]
+                  : result.solids.length == 1
+                      ? label
+                      : '${label ?? 'Part'} ${i + 1}',
+            ),
+        ];
+      }
+    } on Object catch (error) {
+      try {
+        final result = IjoStep.readAll(bytes);
+        return [
+          for (var i = 0; i < result.solids.length; i++)
+            IjoDocument.mesh(
+              result.solids[i],
+              name: result.names[i].trim().isNotEmpty
+                  ? result.names[i]
+                  : result.solids.length == 1
+                      ? label
+                      : '${label ?? 'Part'} ${i + 1}',
+            ),
+        ];
+      } on Object catch (fallbackError) {
+        throw FormatException(
+          'STEP BREP import failed: $error. Faceted STEP import also failed: '
+          '$fallbackError',
+        );
+      }
+    }
+
+    final result = IjoStep.readAll(bytes);
+    return [
+      for (var i = 0; i < result.solids.length; i++)
+        IjoDocument.mesh(
+          result.solids[i],
+          name: result.names[i].trim().isNotEmpty
+              ? result.names[i]
+              : result.solids.length == 1
+                  ? label
+                  : '${label ?? 'Part'} ${i + 1}',
+        ),
+    ];
+  }
 
   /// Encodes [document] as [format].
   ///
